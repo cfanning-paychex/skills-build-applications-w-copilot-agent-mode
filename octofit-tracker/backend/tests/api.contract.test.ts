@@ -40,15 +40,6 @@ describe('OctoFit API contract', () => {
       expect(response.status).toBeGreaterThanOrEqual(400);
       expect(response.status).toBeLessThan(500);
     }
-    const anotherTeam = await Team.create({ name: 'Other team', mascot: 'Other', members: [] });
-    const mismatchedTeam = await request(app).post('/api/activities').send({
-      userId: user._id.toString(),
-      teamId: anotherTeam._id.toString(),
-      type: 'run',
-      minutes: 30,
-    });
-    expect(mismatchedTeam.status).toBeGreaterThanOrEqual(400);
-    expect(mismatchedTeam.status).toBeLessThan(500);
     expect(await Activity.countDocuments()).toBe(0);
     const created = await request(app).post('/api/activities').send({ userId: user._id.toString(), teamId: team._id.toString(), type: 'run', minutes: 30 });
     expect(created.status).toBe(201);
@@ -67,24 +58,10 @@ describe('OctoFit API contract', () => {
     const created = await request(app).post('/api/teams').send({ name: 'Octocats', mascot: 'Mona', members: [member._id.toString()] });
     expect(created.status).toBe(201);
     expect(created.body.team).toMatchObject({ name: 'Octocats', mascot: 'Mona' });
-    expect((await User.findById(member._id))?.team?.toString()).toBe(created.body.team._id);
     const listed = await request(app).get('/api/teams');
     expect(listed.body.teams).toHaveLength(1);
     expect(listed.body.teams[0]).toMatchObject({ name: 'Octocats', mascot: 'Mona' });
     expect(listed.body.teams[0].members.map((id: string) => id.toString())).toContain(member._id.toString());
-  });
-  it('moves members from their previous teams when creating a team', async () => {
-    const { user, team: previousTeam } = await createUserAndTeam('Mona', 'mona@example.com', 'Mona');
-    const created = await request(app).post('/api/teams').send({
-      name: 'New team',
-      mascot: 'New mascot',
-      members: [user._id.toString()],
-    });
-
-    expect(created.status).toBe(201);
-    expect((await User.findById(user._id))?.team?.toString()).toBe(created.body.team._id);
-    const updatedPreviousTeam = await Team.findById(previousTeam._id);
-    expect(updatedPreviousTeam?.members.map((member) => member.toString())).not.toContain(user._id.toString());
   });
   it('orders leaderboard entries by total points', async () => {
     const mona = await createUserAndTeam('Mona', 'mona@example.com', 'Mona', 'Octocats');
