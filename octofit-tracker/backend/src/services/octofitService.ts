@@ -23,10 +23,13 @@ export async function createActivity(input: unknown) {
   }
 
   const [user, team] = await Promise.all([
-    User.findById(new Types.ObjectId(userId)).select('_id'),
-    Team.findById(new Types.ObjectId(teamId)).select('_id'),
+    User.findById(new Types.ObjectId(userId)).select('_id team'),
+    Team.findById(new Types.ObjectId(teamId)).select('_id members'),
   ]);
   if (!user || !team) throw Object.assign(new Error('User or team not found'), { status: 404 });
+  if (!user.team?.equals(team._id) || !team.members.some((member) => member.equals(user._id))) {
+    throw Object.assign(new Error('User does not belong to the specified team'), { status: 400 });
+  }
 
   return Activity.create({
     user: user._id,
@@ -60,7 +63,15 @@ export async function createTeam(_input: unknown) {
     throw Object.assign(new Error('One or more team members were not found'), { status: 404 });
   }
 
-  return Team.create({ name: name.trim(), mascot: mascot.trim(), members });
+  const team = await Team.create({ name: name.trim(), mascot: mascot.trim(), members });
+  if (members.length) {
+    await Team.updateMany(
+      { _id: { $ne: team._id }, members: { $in: members } },
+      { $pull: { members: { $in: members } } },
+    );
+    await User.updateMany({ _id: { $in: members } }, { $set: { team: team._id } });
+  }
+  return team;
 }
 
 export async function getLeaderboard() {
